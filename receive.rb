@@ -3,14 +3,14 @@ require 'bundler'
 Bundler.require
 
 class Receive < Goliath::API
-  #def on_headers(env, headers)
-  #  env.logger.info 'received headers: ' + headers.inspect
-  #  env['async-headers'] = headers
-  #end
+  def on_headers(env, headers)
+    #env.logger.info 'received headers: ' + headers.inspect
+    #env['async-headers'] = headers
+    @test = rand
+  end
 
   def on_body(env, data)
-    env.logger.info 'received data: ' + data.size.to_s
-    sleep(2)
+    env.logger.info 'received data: ' + data.size.to_s + @test.to_s
     #(env['async-body'] ||= '') << data
   end  
 
@@ -22,7 +22,7 @@ class Receive < Goliath::API
     # Yes, the timer is something like 55s but I like 30s, okay? ;)
     keepalive = EM.add_periodic_timer(29) do
       env.stream_send("Heartbeat.\n")
-      env.logger.info "heartbeat sent"
+      env.logger.info "heartbeat sent" + @test.to_s
 
       keepalive.cancel
       env.stream_send("End of stream.")
