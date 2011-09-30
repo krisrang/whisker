@@ -10,7 +10,7 @@ class Receive < Goliath::API
 
   def on_body(env, data)
     env.logger.info 'received data: ' + data.size.to_s
-    EM::Synchrony.sleep(2)
+    sleep(2)
     #(env['async-body'] ||= '') << data
   end  
 
