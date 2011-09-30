@@ -21,7 +21,10 @@ class Receive < Goliath::API
     keepalive = EM.add_periodic_timer(29) do
       env.stream_send("Heartbeat.\n")
       env.logger.info "heartbeat sent"
+      
       keepalive.cancel
+      env.stream_send("End of stream.")
+      env.stream_close
     end
     
     # The below cuts off the connection at some point if this is desired.
@@ -33,7 +36,7 @@ class Receive < Goliath::API
     # end
     #env.stream_close
 
-    [200, {}, {}]
+    [200, {}, Goliath::Response::STREAMING]
     #[200, {}, {body: env['async-body'].size.to_s, head: env['async-headers']}]
     #[200, {}, Goliath::Response::STREAMING]
   end
