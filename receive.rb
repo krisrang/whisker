@@ -10,7 +10,7 @@ class Receive < Goliath::API
   use Goliath::Rack::Validation::RequestMethod, %w(POST PUT)
 
   def on_headers(env, headers)
-    id = headers["UploadId"]
+    id = headers["Uploadid"]
     env.logger.info 'headers: ' + headers.inspect
 
     unless id.nil?
