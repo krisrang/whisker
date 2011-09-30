@@ -6,11 +6,11 @@ class Receive < Goliath::API
   def on_headers(env, headers)
     #env.logger.info 'received headers: ' + headers.inspect
     #env['async-headers'] = headers
-    @test = rand
+    env['counter'] = rand.to_s
   end
 
   def on_body(env, data)
-    env.logger.info 'received data: ' + data.size.to_s + @test.to_s
+    env.logger.info 'received data: ' + data.size.to_s + env['counter']
     #(env['async-body'] ||= '') << data
   end  
 
@@ -20,9 +20,9 @@ class Receive < Goliath::API
     # This timer keeps the connection alive later in the stream when
     # the number generation slows down sufficiently for > 30s response time.
     # Yes, the timer is something like 55s but I like 30s, okay? ;)
-    keepalive = EM.add_periodic_timer(29) do
+    keepalive = EM.add_periodic_timer(5) do
       env.stream_send("Heartbeat.\n")
-      env.logger.info "heartbeat sent" + @test.to_s
+      env.logger.info "heartbeat sent" + env['counter']
 
       keepalive.cancel
       env.stream_send("End of stream.")
