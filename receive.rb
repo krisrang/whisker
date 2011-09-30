@@ -9,7 +9,7 @@ class Receive < Goliath::API
   end
 
   def on_body(env, data)
-    env.logger.info 'received data: ' + data.size
+    env.logger.info 'received data: ' + data.size.to_s
     (env['async-body'] ||= '') << data
   end
 
@@ -34,7 +34,7 @@ class Receive < Goliath::API
     #   env.stream_close
     # end
 
-    [200, {}, {body: env['async-body'].size, head: env['async-headers']}]
+    [200, {}, {body: env['async-body'].size.to_s, head: env['async-headers']}]
     #[200, {}, Goliath::Response::STREAMING]
   end
 end
