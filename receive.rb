@@ -11,6 +11,8 @@ class Receive < Goliath::API
   def on_body(env, data)
     env.logger.info 'received data: ' + data.size.to_s
     #(env['async-body'] ||= '') << data
+
+    env.stream_send("Heartbeat.\n")
   end  
 
   def response(env)
