@@ -29,7 +29,7 @@ class Receive < Goliath::API
     #   env.stream_send("End of stream.")
     #   env.stream_close
     # end
-    env.stream_close
+    #env.stream_close
 
     [200, {}, {}]
     #[200, {}, {body: env['async-body'].size.to_s, head: env['async-headers']}]
