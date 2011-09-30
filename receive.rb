@@ -11,6 +11,7 @@ class Receive < Goliath::API
 
   def on_headers(env, headers)
     id = headers["UploadId"]
+    env.logger.info 'headers: ' + headers.inspect
 
     unless id.nil?
       info = UploadInfo.new(id)
