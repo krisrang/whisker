@@ -49,5 +49,6 @@ PLATFORMS
   ruby
 
 DEPENDENCIES
+  em-synchrony
   goliath
   heroku
