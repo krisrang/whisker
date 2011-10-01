@@ -41,7 +41,7 @@ class UploadHandler
       if @expected <= @chunklimit
         @storage.put_object(@bucket, @upload.key, @buffer, @upload.headers)
       else
-        put_part(env) if @buffer.bytesize > 0 # last part
+        put_part if @buffer.bytesize > 0 # last part
         @storage.complete_multipart_upload(@bucket, @upload.key, @uploadid, @parts)
         env.logger.info "multipart finished: " + @uploadid
         env.logger.info "received: " + @received.to_s
