@@ -2,61 +2,75 @@ require 'rubygems'
 require 'bundler'
 Bundler.require
 
-$:<< './'
-require 'lib/glue'
-require 'lib/upload_info'
+$:<< 'lib'
+
+require 'upload'
+require 'upload_handler'
 
 class Receive < Goliath::API
-  use Goliath::Rack::Validation::RequestMethod, %w(POST PUT)
+  use ::Rack::Reloader, 0 if Goliath.dev?
+  use Goliath::Rack::Validation::RequestMethod, %w(POST PUT OPTIONS)
 
   def on_headers(env, headers)
     id = headers["Uploadid"]
-    env.logger.info 'headers: ' + headers.inspect
 
     unless id.nil?
-      info = UploadInfo.new(id)
-      env['uploadinfo'] = info
+      begin
+        handler = UploadHandler.new(id)
+        handler.expected = headers["Content-Length"]
+        handler.initiate
 
-      # fetch upload model
-      # initiate multipart
-
-      env.logger.info 'initiate upload: ' + id
+        env['uploadhandler'] = handler
+        env.logger.info 'initiated upload: ' + id
+      rescue
+        env.logger.info 'invalid upload, skip'
+      end
     end
   end
 
   def on_body(env, data)
-    unless env['uploadinfo'].nil?
-      #env.logger.info 'received data: ' + data.size.to_s
-
-      # buffer up 5 mbs worth -> upload part
-      # buffer up 100 kbs worth -> process metadata
-    end
+    env['uploadhandler'].queue(env,data) unless env['uploadhandler'].nil?
   end  
 
   def response(env)
     env.logger.info 'response'
 
-    unless env['uploadinfo'].nil?
+    if env["REQUEST_METHOD"] == "OPTIONS"
+      return [200, cors_headers, {}]
+    end
+
+    handler = env['uploadhandler']
+
+    if handler.nil? || !handler.exist?
+      error_response "invalid upload"
+    elsif !handler.error.nil?
+      error_response handler.error
+    else
       keepalive = EM.add_periodic_timer(1) do
-        env.stream_send("Heartbeat.\n")
-        env.logger.info "heartbeat sent"
+        env.stream_send("\0")
+        handler.complete keepalive, env
 
-        keepalive.cancel
-        env.stream_send("End of stream.")
-        env.stream_close
-
-        env.logger.info env['uploadinfo'].id
-
-        # keep checking if all parts are uploaded -> complete multipart -> save metadata
+        env.logger.info 'completed upload: ' + handler.id.to_s
+        env['uploadhandler'] = handler = nil        
       end
 
-      [200, {}, Goliath::Response::STREAMING]
-    else
-      [422, {}, {error: "invalid upload"}]
+      [200, cors_headers, Goliath::Response::STREAMING]
     end    
   end
 
   def on_close(env)
     env.logger.info 'closing connection'
+  end
+
+  def cors_headers
+    {
+      "Access-Control-Allow-Origin" => "*",
+      "Access-Control-Allow-Methods" => "POST,PUT",
+      "Access-Control-Allow-Headers" => "Origin,Content-Type,Uploadid"
+    }
+  end
+
+  def error_response(error)
+    [422, cors_headers, {error: error}]
   end
 end

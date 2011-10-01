@@ -1,7 +1,12 @@
 source 'http://rubygems.org'
 
 gem 'em-synchrony'
-gem 'httparty'
+
+gem "mongoid"
+gem "bson_ext"
+gem "fog"
+
 gem 'goliath'
+
 gem 'heroku'
 gem 'pry'
