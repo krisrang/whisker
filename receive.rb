@@ -4,32 +4,41 @@ Bundler.require
 
 $:<< 'lib'
 
+require 'em-synchrony/em-http'
+require 'base_upload'
+require 'small_upload'
+require 'multipart_upload'
 require 'upload'
 require 'upload_handler'
 
 class Receive < Goliath::API
-  use ::Rack::Reloader, 0 if Goliath.dev?
+  include Goliath::Validation
   use Goliath::Rack::Validation::RequestMethod, %w(POST PUT OPTIONS)
 
   def on_headers(env, headers)
     id = headers["Uploadid"]
 
-    unless id.nil?
-      begin
-        handler = UploadHandler.new(id)
-        handler.expected = headers["Content-Length"]
-        handler.initiate
+    return if id.nil?
 
-        env['uploadhandler'] = handler
-        env.logger.info 'initiated upload: ' + id
-      rescue
-        env.logger.info 'invalid upload, skip'
-      end
+    begin
+      handler = UploadHandler.new(id, headers["Content-Length"])
+      handler.initiate
+
+      env['uploadhandler'] = handler
+      env.logger.info 'initiated upload: ' + id
+    rescue Exception => e
+      env['uploadhandler'] = nil
+      env.logger.info 'error: ' + e.inspect
     end
   end
 
   def on_body(env, data)
-    env['uploadhandler'].queue(env,data) unless env['uploadhandler'].nil?
+    begin
+      env['uploadhandler'].queue(env,data) if !!env['uploadhandler']
+    rescue Exception => e
+      env['uploadhandler'] = nil
+      env.logger.info 'error: ' + e.inspect
+    end
   end  
 
   def response(env)
@@ -42,23 +51,36 @@ class Receive < Goliath::API
     handler = env['uploadhandler']
 
     if handler.nil? || !handler.exist?
-      error_response "invalid upload"
-    elsif !handler.error.nil?
-      error_response handler.error
+      invalid_upload_error
+    elsif !!handler.error
+      invalid_upload_error handler.error
     else
-      keepalive = EM.add_periodic_timer(1) do
-        env.stream_send("\0")
-        handler.complete keepalive, env
+      begin
+        keepalive = EM.add_periodic_timer(2) do
+          env.chunked_stream_send("processing\n")
+          handler.complete keepalive, env   
+        end
 
-        env.logger.info 'completed upload: ' + handler.id.to_s
-        env['uploadhandler'] = handler = nil        
+        timeout = EM.add_timer(600) do # 10 minute timeout
+          keepalive.cancel
+          handler.abort
+          env['uploadhandler'] = nil
+          env.chunked_stream_close
+        end
+
+        chunked_streaming_response 200, cors_headers
+      rescue Exception => e
+        timeout.cancel if !!timeout
+        keepalive.cancel if !!keepalive
+        env['uploadhandler'] = nil
+        env.chunked_stream_close
+        env.logger.info 'error: ' + e.inspect
       end
-
-      [200, cors_headers, Goliath::Response::STREAMING]
     end    
   end
 
   def on_close(env)
+    env['uploadhandler'].abort if !!env['uploadhandler']
     env.logger.info 'closing connection'
   end
 
@@ -70,7 +92,7 @@ class Receive < Goliath::API
     }
   end
 
-  def error_response(error)
-    [422, cors_headers, {error: error}]
+  def invalid_upload_error(error = "Invalid upload")
+    raise Goliath::Validation::BadRequestError.new error
   end
 end

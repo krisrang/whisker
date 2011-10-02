@@ -1,21 +1,23 @@
 class UploadHandler
-  def initialize(id)
+  attr_accessor :error
+
+  def initialize(id, expected)
     @error = nil
-    @expected = 0
+
+    @expected = expected.to_i
     @received = 0
-    @chunk = 1
+
     @chunklimit = 5*1024*1024 # 5MB
-    @parts = []
+
+    @multipart = @expected > @chunklimit
+
     clear_buffer
-    setup_storage
     @upload = Upload.find id
+    @uploader = @multipart ? MultipartUpload.new(@upload) : SmallUpload.new(@upload)
   end
 
   def initiate
-    if @expected > @chunklimit
-      response = @storage.initiate_multipart_upload(@bucket, @upload.key, @upload.headers)
-      @uploadid = response.body["UploadId"]
-    end
+    @uploader.initiate
   end
 
   def queue(env, data)
@@ -28,72 +30,45 @@ class UploadHandler
         clear_buffer
       end
 
-      if @expected > @chunklimit
-        put_part if @buffer.bytesize > @chunklimit
-         
-        @buffer << data
-      end
+      @buffer << data
+      flush_buffer if @buffer.bytesize > @chunklimit # if multipart
     end
   end
 
   def complete(ticker, env)
     if @error.nil?
-      if @expected <= @chunklimit
-        @storage.put_object(@bucket, @upload.key, @buffer, @upload.headers)
-      else
-        put_part if @buffer.bytesize > 0 # last part
-        @storage.complete_multipart_upload(@bucket, @upload.key, @uploadid, @parts)
-        env.logger.info "multipart finished: " + @uploadid
-        env.logger.info "received: " + @received.to_s
-      end
-
-      @upload.complete(@received).save
+      flush_buffer if @buffer.bytesize > 0 # last part or non-multipart
+      cleanup(ticker, env) if @uploader.complete?
     end
+  end
 
+   def flush_buffer
+    data = @buffer.clone
     clear_buffer
-    # keep checking for completion and close up when done
+    @uploader.queue(data)    
+  end
+
+  def abort
+    @uploader.abort if !!@uploader
+  end
+
+  def cleanup(ticker,env)
     ticker.cancel
-    env.stream_close
-  end
-
-  def put_part
-    response = @storage.upload_part(@bucket, @upload.key, @uploadid, @chunk, @buffer)
-    @parts = @parts.dup.insert(@chunk-1, response.headers["ETag"])
-    @chunk = @chunk+1
     clear_buffer
-  end
 
-  def id
-    @upload.id
-  end
+    @upload.complete(@received).save
+    
+    env.chunked_stream_close
+    env.logger.info 'received: ' + @received.to_s
+    env.logger.info 'completed upload: ' + @upload.id.to_s
+  end 
 
   def exist?
     !!@upload
   end
 
-  def error
-    @error
-  end
-
-  def expected=(size)
-    @expected = size.to_i
-  end
-
   protected
     def clear_buffer
       @buffer = "".force_encoding('BINARY')
-    end
-
-    def setup_storage
-      @storage = Fog::Storage.new(
-        provider: 'AWS',
-        #region: Settings.s3_region,
-        aws_access_key_id: ENV['S3_KEY'],
-        aws_secret_access_key: ENV['S3_SECRET'],
-        port: 80,
-        scheme: "http"
-      )
-
-      @bucket = "pawdrop"
     end
 end

@@ -1,5 +1,6 @@
 source 'http://rubygems.org'
 
+gem 'em-http-request'
 gem 'em-synchrony'
 
 gem "mongoid"
