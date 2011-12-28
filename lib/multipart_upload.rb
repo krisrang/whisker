@@ -1,3 +1,4 @@
+# uploads files bigger than the chunk limit in multiple parts using the S3 multipart API
 class MultipartUpload < BaseUpload
   def initiate
     @chunks = 0

@@ -1,3 +1,4 @@
+# uploads files smaller than chunk limit as a single file
 class SmallUpload < BaseUpload
   def initiate
     @complete = false

@@ -1,13 +1,15 @@
+# main class handling uploads
 class UploadHandler
   attr_accessor :error
 
+  # set up initial values for the request
   def initialize(id, expected)
     @error = nil
 
     @expected = expected.to_i
     @received = 0
 
-    @chunklimit = 5*1024*1024 # 5MB
+    @chunklimit = 5*1024*1024 # split files bigger than 5MB into a multipart upload
 
     @multipart = @expected > @chunklimit
 
@@ -20,6 +22,7 @@ class UploadHandler
     @uploader.initiate
   end
 
+  # queue received data in the buffer and check if it's time to flush
   def queue(env, data)
     if @error.nil?
       data.force_encoding('BINARY')
@@ -35,6 +38,7 @@ class UploadHandler
     end
   end
 
+  # last bits received, flush remaining bits and cleanup
   def complete(ticker, env)
     if @error.nil?
       flush_buffer if @buffer.bytesize > 0 # last part or non-multipart
@@ -42,6 +46,7 @@ class UploadHandler
     end
   end
 
+  # flush received buffer to S3
    def flush_buffer
     data = @buffer.clone
     clear_buffer
@@ -52,6 +57,7 @@ class UploadHandler
     @uploader.abort if !!@uploader
   end
 
+  # clear buffer, close connections, finalize model
   def cleanup(ticker,env)
     ticker.cancel
     clear_buffer

@@ -15,6 +15,8 @@ class Receive < Goliath::API
   include Goliath::Validation
   use Goliath::Rack::Validation::RequestMethod, %w(POST PUT OPTIONS)
 
+  # set up request based on the headers
+  # must include the Upload ID and the Content-Length headers
   def on_headers(env, headers)
     id = headers["Uploadid"]
 
@@ -32,6 +34,7 @@ class Receive < Goliath::API
     end
   end
 
+  # receive parts of upload, usually in about 5KB pieces
   def on_body(env, data)
     begin
       env['uploadhandler'].queue(env,data) if !!env['uploadhandler']
@@ -41,6 +44,8 @@ class Receive < Goliath::API
     end
   end  
 
+  # all parts received, wait up for the last parts to be transferred to S3 and assembled
+  # alternatively, simply respond to CORS security requests to allow x-domain requests
   def response(env)
     env.logger.info 'response'
 
@@ -61,7 +66,9 @@ class Receive < Goliath::API
           handler.complete keepalive, env   
         end
 
-        timeout = EM.add_timer(600) do # 10 minute timeout
+        # 10 minute timeout before aborting
+        # shouldn't take longer than this unless Heroku or Amazon is having issues
+        timeout = EM.add_timer(600) do
           keepalive.cancel
           handler.abort
           env['uploadhandler'] = nil
@@ -79,11 +86,13 @@ class Receive < Goliath::API
     end    
   end
 
+  # cleanup
   def on_close(env)
     env['uploadhandler'].abort if !!env['uploadhandler']
     env.logger.info 'closing connection'
   end
 
+  # allow all CORS requests
   def cors_headers
     {
       "Access-Control-Allow-Origin" => "*",
@@ -92,6 +101,7 @@ class Receive < Goliath::API
     }
   end
 
+  # invalid request abort helper
   def invalid_upload_error(error = "Invalid upload")
     raise Goliath::Validation::BadRequestError.new error
   end

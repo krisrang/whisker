@@ -1,3 +1,4 @@
+# base class for upload models
 class BaseUpload
   def initialize(upload)
     @upload = upload

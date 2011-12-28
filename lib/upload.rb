@@ -1,5 +1,6 @@
 require 'uri'
 
+# model of the upload in the main app's database
 class Upload
   include Mongoid::Document
   include Mongoid::Timestamps
@@ -22,6 +23,7 @@ class Upload
 
   index :guid, unique: true
 
+  # headers to store the file with in S3, mostly cache control
   def headers
     {}.tap do |options|
       options["Content-Disposition"] = self.kind == "image" ? "inline" : "attachment"
@@ -33,6 +35,8 @@ class Upload
     end
   end
 
+  # helper to set model attributes when file finishes uploading
+  # sets the upload to exactly what we received and not what the client claimed as the size
   def complete(size)
     self.size = size
     self.status = 5
